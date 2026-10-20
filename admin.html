@@ -164,7 +164,7 @@ async function loadRegistrations() {
   message.textContent = "Loading registrations...";
   const { data, error } = await client
     .from("registrations")
-    .select("id, player_name, phone, player_type, tournament_id, address, message, status")
+  .select("id, player_name, phone, player_type, tournament_id, address, message, status, bkash_trx_id, payment_amount, payment_status")
     .order("tournament_id", { ascending: false });
 
   if (error) {
@@ -204,9 +204,99 @@ async function loadRegistrations() {
     statusSelect.dataset.phone = reg.phone;
     statusSelect.dataset.playerName = reg.player_name;
 
-    statusCell.appendChild(statusSelect);
-    tr.appendChild(statusCell);
-    const actionCell = document.createElement("td");
+   statusCell.appendChild(statusSelect);
+tr.appendChild(statusCell);
+
+// Show bKash Transaction ID
+const trxCell = document.createElement("td");
+trxCell.textContent = reg.bkash_trx_id || "Not provided";
+tr.appendChild(trxCell);
+
+// Show payment amount
+const amountCell = document.createElement("td");
+amountCell.textContent = "৳" + (reg.payment_amount ?? 100);
+tr.appendChild(amountCell);
+
+// Show payment status
+const paymentStatusCell = document.createElement("td");
+paymentStatusCell.textContent = reg.payment_status || "Pending";
+tr.appendChild(paymentStatusCell);
+
+// Payment approval button
+const paymentActionCell = document.createElement("td");
+const approvePaymentButton = document.createElement("button");
+
+approvePaymentButton.textContent =
+  reg.payment_status === "Approved"
+    ? "Approved"
+    : "Verify & Approve Payment";
+
+approvePaymentButton.disabled =
+  reg.payment_status === "Approved";
+
+approvePaymentButton.addEventListener("click", async () => {
+  if (!reg.bkash_trx_id) {
+    message.textContent = "No bKash Transaction ID provided.";
+    return;
+  }
+
+  const confirmed = confirm(
+    "Have you verified this bKash payment of ৳" +
+    (reg.payment_amount ?? 100) +
+    " for TrxID " + reg.bkash_trx_id + "?"
+  );
+
+  if (!confirmed) return;
+
+  approvePaymentButton.disabled = true;
+  message.textContent = "Verifying payment...";
+
+  try {
+    const { data: { user }, error: authError } =
+      await client.auth.getUser();
+
+    if (authError || !user) {
+      throw new Error("Please log in again.");
+    }
+
+    const { data: admin, error: adminError } = await client
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (adminError || !admin) {
+      throw new Error("Admin permission required.");
+    }
+
+    const { data: updatedRows, error: updateError } = await client
+      .from("registrations")
+      .update({ payment_status: "Approved" })
+      .eq("id", reg.id)
+      .eq("payment_status", "Pending")
+      .select("id");
+
+    if (updateError) throw updateError;
+
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error(
+        "Payment was not updated. Refresh and check its current status."
+      );
+    }
+
+    message.textContent = "Payment approved successfully.";
+    await loadRegistrations();
+
+  } catch (error) {
+    message.textContent = "Approval failed: " + error.message;
+    approvePaymentButton.disabled = false;
+  }
+});
+
+paymentActionCell.appendChild(approvePaymentButton);
+tr.appendChild(paymentActionCell);
+
+const actionCell = document.createElement("td");
 const deleteButton = document.createElement("button");
 
 deleteButton.textContent = "Delete";
