@@ -615,13 +615,21 @@
     </div>
   </footer>
 
-  <script>
   
-document.getElementById("year").textContent =
-  new Date().getFullYear();
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-// Supabase connection will be added here next.
+<script>
+  document.getElementById("year").textContent =
+    new Date().getFullYear();
 
-  </script>
+  const SUPABASE_URL = "https://ctfqtveemhqmtfhjrrri.supabase.co/rest/v1/";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_D7E3_PlX7WaxxDBKVXnB-w_LO63lD3r";
+
+  const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+</script>
+
 </body>
 </html>
