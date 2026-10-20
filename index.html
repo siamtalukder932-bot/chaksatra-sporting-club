@@ -733,14 +733,18 @@ registrationForm.addEventListener("submit", async function(event) {
   try {
     const { error } = await supabaseClient
       .from("registrations")
-      .insert([{
-        tournament_id: Number(tournamentId),
-        player_name: playerName,
-        phone: phone,
-        player_type: playerType,
-        address: address,
-        message: message
-      }]);
+     .insert([{
+  tournament_id: Number(tournamentId),
+  player_name: playerName,
+  phone: phone,
+  player_type: playerType,
+  address: address,
+  message: message,
+  bkash_trx_id: bkashTrxId,
+  payment_method: "bKash Send Money",
+  payment_amount: 100,
+  payment_status: "Pending"
+}]);
 
     if (error) throw error;
 
