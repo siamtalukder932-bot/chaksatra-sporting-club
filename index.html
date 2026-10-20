@@ -616,18 +616,12 @@
   </footer>
 
   <script>
-    document.getElementById("year").textContent =
-      new Date().getFullYear();
+  
+document.getElementById("year").textContent =
+  new Date().getFullYear();
 
-    document.getElementById("registrationForm")
-      .addEventListener("submit", function (event) {
-        event.preventDefault();
+// Supabase connection will be added here next.
 
-        document.getElementById("formMessage").textContent =
-          "This demo form is not connected to a database yet. " +
-          "Your registration has NOT been submitted. " +
-          "Please check back after the online registration system is connected.";
-      });
   </script>
 </body>
 </html>
