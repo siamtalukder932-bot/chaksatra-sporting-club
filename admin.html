@@ -36,6 +36,61 @@
   <p id="message" role="status"></p>
 
   <section id="dashboard" class="hidden">
+    <hr>
+<h2>Tournament Management</h2>
+
+<form id="tournamentForm">
+  <input
+    id="tournamentTitle"
+    placeholder="Tournament Name"
+    required
+  >
+
+  <input
+    id="tournamentSport"
+    placeholder="Sport (e.g. Badminton)"
+    required
+  >
+
+  <input
+    id="tournamentFee"
+    type="number"
+    min="0"
+    placeholder="Registration Fee"
+    value="0"
+    required
+  >
+
+  <input
+    id="tournamentDeadline"
+    type="date"
+  >
+
+  <textarea
+    id="tournamentDescription"
+    placeholder="Tournament Description"
+  ></textarea>
+
+  <button type="submit">Add Tournament</button>
+</form>
+
+<p id="tournamentMessage" role="status"></p>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Sport</th>
+        <th>Fee</th>
+        <th>Deadline</th>
+        <th>Published</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tournamentRows"></tbody>
+  </table>
+</div>
     <h2>Registration Dashboard</h2>
     <button id="refreshButton" type="button">Refresh registrations</button>
     <button id="logoutButton" type="button">Logout</button>
@@ -98,6 +153,7 @@ async function showDashboard() {
   loginForm.classList.add("hidden");
   dashboard.classList.remove("hidden");
   await loadRegistrations();
+  await loadAdminTournaments();
 }
 
 async function loadRegistrations() {
@@ -283,6 +339,169 @@ document.getElementById("logoutButton").addEventListener("click", async () => {
       select.disabled = false;
     }
   });
+  
+const tournamentForm = document.getElementById("tournamentForm");
+const tournamentMessage = document.getElementById("tournamentMessage");
+const tournamentRows = document.getElementById("tournamentRows");
+
+async function loadAdminTournaments() {
+  const { data, error } = await client
+    .from("tournaments")
+    .select("id, title, sport, description, registration_fee, registration_deadline, is_published")
+    .order("id", { ascending: false });
+
+  if (error) {
+    tournamentMessage.textContent = "Load failed: " + error.message;
+    return;
+  }
+
+  tournamentRows.replaceChildren();
+
+  (data || []).forEach(t => {
+    const tr = document.createElement("tr");
+
+    [
+      t.title,
+      t.sport,
+      t.registration_fee ?? 0,
+      t.registration_deadline || "—",
+      t.is_published ? "Yes" : "No"
+    ].forEach(value => {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      tr.appendChild(td);
+    });
+
+    const actions = document.createElement("td");
+
+    const editButton = document.createElement("button");
+    editButton.textContent = "Edit";
+
+    editButton.addEventListener("click", async () => {
+      const title = prompt("Tournament name:", t.title);
+      if (title === null) return;
+
+      const sport = prompt("Sport:", t.sport);
+      if (sport === null) return;
+
+      const feeText = prompt("Registration fee:", t.registration_fee ?? 0);
+      if (feeText === null) return;
+
+      const fee = Number(feeText);
+      if (!title.trim() || !sport.trim() || !Number.isFinite(fee) || fee < 0) {
+        alert("Enter a valid name, sport and fee.");
+        return;
+      }
+
+      const description = prompt("Description:", t.description || "");
+      if (description === null) return;
+
+      const deadline = prompt(
+        "Deadline (YYYY-MM-DD, or blank):",
+        t.registration_deadline || ""
+      );
+      if (deadline === null) return;
+
+      if (deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+        alert("Enter the date as YYYY-MM-DD.");
+        return;
+      }
+
+      const { error } = await client
+        .from("tournaments")
+        .update({
+          title: title.trim(),
+          sport: sport.trim(),
+          registration_fee: fee,
+          description: description.trim(),
+          registration_deadline: deadline || null
+        })
+        .eq("id", t.id);
+
+      if (error) {
+        tournamentMessage.textContent = "Edit failed: " + error.message;
+        return;
+      }
+
+      tournamentMessage.textContent = "Tournament updated.";
+      await loadAdminTournaments();
+    });
+
+    const toggleButton = document.createElement("button");
+    toggleButton.textContent = t.is_published
+      ? "Close Registration"
+      : "Publish";
+
+    toggleButton.addEventListener("click", async () => {
+      const nextValue = !t.is_published;
+
+      if (!confirm(
+        `Are you sure you want to ${
+          nextValue ? "publish" : "close registration for"
+        } "${t.title}"?`
+      )) return;
+
+      const { error } = await client
+        .from("tournaments")
+        .update({ is_published: nextValue })
+        .eq("id", t.id);
+
+      if (error) {
+        tournamentMessage.textContent = "Update failed: " + error.message;
+        return;
+      }
+
+      tournamentMessage.textContent = nextValue
+        ? "Tournament published."
+        : "Registration closed.";
+
+      await loadAdminTournaments();
+    });
+
+    actions.append(editButton, document.createTextNode(" "), toggleButton);
+    tr.appendChild(actions);
+    tournamentRows.appendChild(tr);
+  });
+}
+
+tournamentForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  tournamentMessage.textContent = "Adding tournament...";
+
+  const title = document.getElementById("tournamentTitle").value.trim();
+  const sport = document.getElementById("tournamentSport").value.trim();
+  const fee = Number(document.getElementById("tournamentFee").value);
+  const deadline =
+    document.getElementById("tournamentDeadline").value || null;
+  const description =
+    document.getElementById("tournamentDescription").value.trim();
+
+  if (!title || !sport || !Number.isFinite(fee) || fee < 0) {
+    tournamentMessage.textContent = "Enter a valid name, sport and fee.";
+    return;
+  }
+
+  const { error } = await client.from("tournaments").insert([{
+    title,
+    sport,
+    registration_fee: fee,
+    registration_deadline: deadline,
+    description,
+    is_published: true
+  }]);
+
+  if (error) {
+    tournamentMessage.textContent = "Add failed: " + error.message;
+    return;
+  }
+
+  tournamentForm.reset();
+  document.getElementById("tournamentFee").value = 0;
+  tournamentMessage.textContent = "Tournament added successfully.";
+
+  await loadAdminTournaments();
+});
+
 </script>
 </body>
 </html>
