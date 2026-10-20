@@ -713,8 +713,10 @@ registrationForm.addEventListener("submit", async function(event) {
     document.getElementById("address").value.trim();
   const message =
     document.getElementById("message").value.trim();
+  const bkashTrxId =
+  document.getElementById("bkashTrxId").value.trim();
 
-  if (!playerName || !phone || !playerType || !tournamentId) {
+  if (!playerName || !phone || !playerType || !tournamentId || !bkashTrxId) {
     formMessage.textContent =
       "Please complete all required fields.";
     return;
