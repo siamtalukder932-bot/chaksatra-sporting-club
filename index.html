@@ -629,6 +629,115 @@
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
   );
+  
+const registrationForm = document.getElementById("registrationForm");
+const formMessage = document.getElementById("formMessage");
+const tournamentSelect = document.getElementById("tournament");
+
+// Load published tournaments from Supabase
+async function loadTournaments() {
+  tournamentSelect.innerHTML =
+    '<option value="">Loading tournaments...</option>';
+
+  const { data, error } = await supabaseClient
+    .from("tournaments")
+    .select("id, title, sport, registration_deadline")
+    .eq("is_published", true)
+    .order("id", { ascending: false });
+
+  if (error) {
+    tournamentSelect.innerHTML =
+      '<option value="">Unable to load tournaments</option>';
+    console.error("Tournament loading error:", error);
+    return;
+  }
+
+  tournamentSelect.innerHTML =
+    '<option value="">Choose a tournament</option>';
+
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Dhaka"
+  });
+
+  const openTournaments = (data || []).filter(t =>
+    !t.registration_deadline || t.registration_deadline >= today
+  );
+
+  openTournaments.forEach(tournament => {
+    const option = document.createElement("option");
+    option.value = tournament.id;
+    option.textContent =
+      tournament.title + " (" + tournament.sport + ")";
+    tournamentSelect.appendChild(option);
+  });
+
+  if (openTournaments.length === 0) {
+    tournamentSelect.innerHTML =
+      '<option value="">No open tournaments available</option>';
+  }
+}
+
+registrationForm.addEventListener("submit", async function(event) {
+  event.preventDefault();
+
+  const playerName =
+    document.getElementById("playerName").value.trim();
+  const phone =
+    document.getElementById("phone").value.trim();
+  const playerType =
+    document.getElementById("playerType").value;
+  const tournamentId = tournamentSelect.value;
+  const address =
+    document.getElementById("address").value.trim();
+  const message =
+    document.getElementById("message").value.trim();
+
+  if (!playerName || !phone || !playerType || !tournamentId) {
+    formMessage.textContent =
+      "Please complete all required fields.";
+    return;
+  }
+
+  const submitButton = registrationForm.querySelector(
+    'button[type="submit"]'
+  );
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Submitting...";
+  formMessage.textContent = "";
+
+  try {
+    const { error } = await supabaseClient
+      .from("registrations")
+      .insert([{
+        tournament_id: Number(tournamentId),
+        player_name: playerName,
+        phone: phone,
+        player_type: playerType,
+        address: address,
+        message: message
+      }]);
+
+    if (error) throw error;
+
+    formMessage.textContent =
+      "Registration submitted successfully!";
+
+    registrationForm.reset();
+    await loadTournaments();
+
+  } catch (error) {
+    console.error("Registration error:", error);
+    formMessage.textContent =
+      "Registration failed. Please try again later.";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Submit Registration";
+  }
+});
+
+loadTournaments();
+
 </script>
 
 </body>
