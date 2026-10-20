@@ -50,6 +50,7 @@
             <th>Tournament ID</th>
             <th>Address</th>
             <th>Message</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody id="registrationRows"></tbody>
@@ -102,7 +103,7 @@ async function loadRegistrations() {
   message.textContent = "Loading registrations...";
   const { data, error } = await client
     .from("registrations")
-    .select("player_name, phone, player_type, tournament_id, address, message")
+    .select("player_name, phone, player_type, tournament_id, address, message, status")
     .order("tournament_id", { ascending: false });
 
   if (error) {
@@ -127,6 +128,23 @@ async function loadRegistrations() {
       td.textContent = value == null ? "" : String(value);
       tr.appendChild(td);
     });
+     const statusCell = document.createElement("td");
+    const statusSelect = document.createElement("select");
+
+    ["Pending", "Approved", "Rejected"].forEach(status => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status;
+      statusSelect.appendChild(option);
+    });
+
+    statusSelect.value = reg.status || "Pending";
+    statusSelect.dataset.tournamentId = reg.tournament_id;
+    statusSelect.dataset.phone = reg.phone;
+    statusSelect.dataset.playerName = reg.player_name;
+
+    statusCell.appendChild(statusSelect);
+    tr.appendChild(statusCell);
     tbody.appendChild(tr);
   });
 
@@ -165,6 +183,54 @@ document.getElementById("logoutButton").addEventListener("click", async () => {
   const { data: { session } } = await client.auth.getSession();
   if (session) await showDashboard();
 })();
+  document.getElementById("registrationRows")
+  .addEventListener("change", async event => {
+    const select = event.target;
+
+    if (select.tagName !== "SELECT") return;
+
+    select.disabled = true;
+    message.textContent = "Saving status...";
+
+    try {
+      const { data: { user }, error: authError } =
+        await client.auth.getUser();
+
+      if (authError || !user) {
+        throw new Error("Please log in again.");
+      }
+
+      // Identify the selected registration using its current fields.
+      const { data: matches, error: findError } = await client
+        .from("registrations")
+        .select("id")
+        .eq("tournament_id", Number(select.dataset.tournamentId))
+        .eq("phone", select.dataset.phone)
+        .eq("player_name", select.dataset.playerName);
+
+      if (findError) throw findError;
+
+      if (!matches || matches.length !== 1) {
+        throw new Error(
+          "Could not uniquely identify this registration. No status was changed."
+        );
+      }
+
+      const { error: updateError } = await client
+        .from("registrations")
+        .update({ status: select.value })
+        .eq("id", matches[0].id);
+
+      if (updateError) throw updateError;
+
+      message.textContent = "Status saved: " + select.value;
+    } catch (error) {
+      message.textContent = "Status save failed: " + error.message;
+      await loadRegistrations();
+    } finally {
+      select.disabled = false;
+    }
+  });
 </script>
 </body>
 </html>
