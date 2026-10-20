@@ -1,0 +1,170 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Panel | Chaksatra Sporting Club</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f2f5f2;color:#183328;margin:0;padding:20px}
+    main{max-width:1000px;margin:25px auto;background:white;padding:24px;border-radius:14px}
+    h1{color:#16834a}input,button{padding:12px;margin:6px 0;box-sizing:border-box}
+    input{width:100%;border:1px solid #ccd5ce;border-radius:7px}
+    button{background:#16834a;color:white;border:0;border-radius:7px;cursor:pointer}
+    .hidden{display:none}
+    .table-wrap{overflow-x:auto}
+    table{border-collapse:collapse;width:100%;margin-top:20px}
+    th,td{padding:10px;border:1px solid #dce3de;text-align:left}
+    th{background:#e8f4eb}
+    #message{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Chaksatra Sporting Club</h1>
+  <h2>Admin Login</h2>
+
+  <form id="loginForm">
+    <label>Email</label>
+    <input id="email" type="email" required autocomplete="username">
+    <label>Password</label>
+    <input id="password" type="password" required autocomplete="current-password">
+    <button type="submit">Login</button>
+  </form>
+
+  <p id="message" role="status"></p>
+
+  <section id="dashboard" class="hidden">
+    <h2>Registration Dashboard</h2>
+    <button id="refreshButton" type="button">Refresh registrations</button>
+    <button id="logoutButton" type="button">Logout</button>
+    <p id="count">Registrations: 0</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Player Type</th>
+            <th>Tournament ID</th>
+            <th>Address</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="registrationRows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ctfqtveemhqmtfhjrrri.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_D7E3_PlX7WaxxDBKVXnB-w_LO63lD3r";
+const client = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+const loginForm = document.getElementById("loginForm");
+const message = document.getElementById("message");
+const dashboard = document.getElementById("dashboard");
+
+async function showDashboard() {
+  const { data: { user }, error: userError } = await client.auth.getUser();
+
+  if (userError || !user) {
+    dashboard.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    return;
+  }
+
+  const { data: admin, error: adminError } = await client
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (adminError || !admin) {
+    await client.auth.signOut();
+    dashboard.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    message.textContent = "This account is not authorized as an admin.";
+    return;
+  }
+
+  loginForm.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+  await loadRegistrations();
+}
+
+async function loadRegistrations() {
+  message.textContent = "Loading registrations...";
+  const { data, error } = await client
+    .from("registrations")
+    .select("player_name, phone, player_type, tournament_id, address, message")
+    .order("tournament_id", { ascending: false });
+
+  if (error) {
+    message.textContent = "Could not load registrations: " + error.message;
+    return;
+  }
+
+  const tbody = document.getElementById("registrationRows");
+  tbody.replaceChildren();
+
+  (data || []).forEach(reg => {
+    const tr = document.createElement("tr");
+    [
+      reg.player_name,
+      reg.phone,
+      reg.player_type,
+      reg.tournament_id,
+      reg.address,
+      reg.message
+    ].forEach(value => {
+      const td = document.createElement("td");
+      td.textContent = value == null ? "" : String(value);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("count").textContent =
+    "Registrations: " + (data || []).length;
+  message.textContent = "";
+}
+
+loginForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  message.textContent = "Signing in...";
+
+  const { error } = await client.auth.signInWithPassword({
+    email: document.getElementById("email").value.trim(),
+    password: document.getElementById("password").value
+  });
+
+  if (error) {
+    message.textContent = "Login failed: " + error.message;
+    return;
+  }
+
+  await showDashboard();
+});
+
+document.getElementById("refreshButton").addEventListener("click", loadRegistrations);
+
+document.getElementById("logoutButton").addEventListener("click", async () => {
+  await client.auth.signOut();
+  dashboard.classList.add("hidden");
+  loginForm.classList.remove("hidden");
+  message.textContent = "Logged out.";
+});
+
+(async () => {
+  const { data: { session } } = await client.auth.getSession();
+  if (session) await showDashboard();
+})();
+</script>
+</body>
+</html>
