@@ -51,6 +51,7 @@
             <th>Address</th>
             <th>Message</th>
             <th>Status</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody id="registrationRows"></tbody>
@@ -103,7 +104,7 @@ async function loadRegistrations() {
   message.textContent = "Loading registrations...";
   const { data, error } = await client
     .from("registrations")
-    .select("player_name, phone, player_type, tournament_id, address, message, status")
+    .select("id, player_name, phone, player_type, tournament_id, address, message, status")
     .order("tournament_id", { ascending: false });
 
   if (error) {
@@ -145,6 +146,57 @@ async function loadRegistrations() {
 
     statusCell.appendChild(statusSelect);
     tr.appendChild(statusCell);
+    const actionCell = document.createElement("td");
+const deleteButton = document.createElement("button");
+
+deleteButton.textContent = "Delete";
+deleteButton.style.background = "#dc2626";
+
+deleteButton.addEventListener("click", async () => {
+  const confirmed = confirm(
+    "Are you sure you want to permanently delete this registration?"
+  );
+
+  if (!confirmed) return;
+
+  const { data: { user }, error: authError } =
+    await client.auth.getUser();
+
+  if (authError || !user) {
+    message.textContent = "Please log in again.";
+    return;
+  }
+
+  const { data: admin, error: adminError } = await client
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (adminError || !admin) {
+    message.textContent = "Admin permission required.";
+    return;
+  }
+
+  deleteButton.disabled = true;
+
+  const { error } = await client
+    .from("registrations")
+    .delete()
+    .eq("id", reg.id);
+
+  if (error) {
+    message.textContent = "Delete failed: " + error.message;
+    deleteButton.disabled = false;
+    return;
+  }
+
+  message.textContent = "Registration deleted successfully.";
+  await loadRegistrations();
+});
+
+actionCell.appendChild(deleteButton);
+tr.appendChild(actionCell);
     tbody.appendChild(tr);
   });
 
